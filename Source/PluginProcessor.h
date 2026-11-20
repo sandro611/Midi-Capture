@@ -1,24 +1,12 @@
 #pragma once
-#include <array>
-#include <map>
-#include <vector>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "ClipCapture.h"
 
-struct RecNote
-{
-    double start;     // position inside the loop, in quarter notes
-    double length;    // in quarter notes
-    int note;
-    int velocity;
-    int channel;
-};
-
-class MidiCaptureProcessor : public juce::AudioProcessor,
-                             private juce::Timer
+class MidiCaptureProcessor : public juce::AudioProcessor
 {
 public:
     MidiCaptureProcessor();
-    ~MidiCaptureProcessor() override;
+    ~MidiCaptureProcessor() override = default;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -43,40 +31,13 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // --- message-thread API used by the editor ---------------------------------
-    const std::vector<RecNote>& getNotes() const { return notes; }
-    double getLoopLengthPpq() const { return juce::jlimit (1, 16, (int) pBars->load()) * 4.0; }
-    void clearPattern();
-    bool exportMidi (const juce::File& target) const;
-    juce::File getTempExportFile() const;
-
     juce::AudioProcessorValueTreeState apvts;
+    ClipCapture capture { apvts };
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
-    struct RawEvent { double ppq; int note; int velocity; int channel; bool isOn; };
-
-    void timerCallback() override { drainFifo(); }
-    void drainFifo();
-    void pushEvent (const RawEvent& e);
-
-    std::atomic<float> *pChannel, *pBars, *pQuant, *pRecord;
-
-    // audio thread -> message thread hand-off
-    static constexpr int fifoSize = 4096;
-    juce::AbstractFifo fifo { fifoSize };
-    std::array<RawEvent, (size_t) fifoSize> fifoData {};
-
-    // audio-thread state
-    bool wasRecording = false;
-    double freeRunPpq = 0.0;
-    std::array<bool, 2048> held {};
-
-    // message-thread state (recorded pattern)
-    struct OpenNote { double start; int velocity; };
-    std::vector<RecNote> notes;
-    std::map<int, OpenNote> openNotes;
+    std::atomic<float>* pChannel = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiCaptureProcessor)
 };
